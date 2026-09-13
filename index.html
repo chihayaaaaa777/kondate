@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>今週の4品</title>
+<style>
+:root{
+  --paper:#f3f4f0;
+  --card:#fdfdfc;
+  --ink:#191d1a;
+  --muted:#6b7269;
+  --line:#dcded7;
+  --moss:#2e5b3e;
+  --moss-soft:#e3ece4;
+  --amber:#8a6a1f;
+  --amber-soft:#f2ebd8;
+  --clay:#8c3b32;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.6;
+  padding-bottom:76px;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:16px;color:var(--ink)}
+:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+
+.screen{display:none;padding:18px 16px 24px;max-width:600px;margin:0 auto}
+.screen.on{display:block}
+
+h1{font-size:20px;font-weight:700;margin:0 0 2px;letter-spacing:.01em}
+.lede{color:var(--muted);font-size:13px;margin:0 0 20px}
+
+/* nav */
+nav{
+  position:fixed;left:0;right:0;bottom:0;
+  display:flex;background:var(--card);
+  border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+  z-index:40;
+}
+nav button{flex:1;padding:11px 4px 13px;font-size:11px;color:var(--muted);font-weight:600}
+nav button .ico{display:block;font-size:19px;line-height:1.3;margin-bottom:1px}
+nav button.on{color:var(--moss)}
+
+/* buttons */
+.primary{
+  display:block;width:100%;padding:14px;border-radius:8px;
+  background:var(--moss);color:#fff;font-size:15px;font-weight:700;
+}
+.primary:disabled{background:#b8bdb6;cursor:default}
+.ghost{
+  display:block;width:100%;padding:12px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:600;
+}
+.mini{font-size:12px;font-weight:600;color:var(--moss);padding:4px 2px}
+
+/* mood picker */
+.moods{display:grid;gap:9px;margin-bottom:18px}
+.mood{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:13px 14px;border-radius:9px;border:1.5px solid var(--line);
+  background:var(--card);text-align:left;
+}
+.mood.sel{border-color:var(--moss);background:var(--moss-soft)}
+.mood .bars{flex:none;display:flex;gap:3px;align-items:flex-end;height:20px}
+.mood .bars i{width:5px;background:var(--line);border-radius:1px;display:block}
+.mood.sel .bars i.f{background:var(--moss)}
+.mood .bars i:nth-child(1){height:8px}
+.mood .bars i:nth-child(2){height:14px}
+.mood .bars i:nth-child(3){height:20px}
+.mood b{display:block;font-size:14.5px;font-weight:700}
+.mood span{display:block;font-size:12px;color:var(--muted)}
+
+/* dish cards */
+.dish{
+  background:var(--card);border:1px solid var(--line);border-radius:9px;
+  padding:13px 14px;margin-bottom:10px;
+}
+.dish.off{opacity:.5}
+.dish .top{display:flex;align-items:flex-start;gap:10px}
+.dish .chk{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--moss)}
+.dish .name{font-size:15.5px;font-weight:700;flex:1;line-height:1.4}
+.dish .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.dish .acts{display:flex;gap:14px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+.dish .acts button,.dish .acts a{font-size:12.5px;font-weight:600;color:var(--moss);text-decoration:none}
+.tag{
+  flex:none;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;
+  background:var(--moss-soft);color:var(--moss);
+}
+.tag.l2{background:var(--amber-soft);color:var(--amber)}
+.tag.l3{background:#eae6f0;color:#4c3f66}
+
+/* shopping */
+.shop-item{
+  display:flex;align-items:flex-start;gap:11px;
+  padding:11px 13px;background:var(--card);
+  border:1px solid var(--line);border-radius:8px;margin-bottom:7px;
+}
+.shop-item input{margin:3px 0 0;width:19px;height:19px;accent-color:var(--moss);flex:none}
+.shop-item .n{flex:1;font-size:14.5px;font-weight:600}
+.shop-item .a{font-size:12.5px;color:var(--muted);margin-top:1px;font-weight:400}
+.shop-item.done .n{opacity:.4;text-decoration:line-through}
+
+/* forms */
+label{display:block;font-size:13px;font-weight:700;margin:16px 0 6px}
+input[type=text],input[type=url],textarea{
+  width:100%;padding:11px 12px;border:1px solid var(--line);
+  border-radius:7px;background:var(--card);
+}
+textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
+.seg{display:flex;gap:6px}
+.seg button{
+  flex:1;padding:10px 4px;border:1.5px solid var(--line);border-radius:7px;
+  background:var(--card);font-size:13px;font-weight:600;
+}
+.seg button.sel{border-color:var(--moss);background:var(--moss-soft);color:var(--moss)}
+
+.ing-row{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+.ing-row input{flex:1;padding:9px 10px;font-size:14px}
+.ing-row input.amt{flex:0 0 92px}
+.ing-row .sw{
+  flex:none;font-size:10.5px;font-weight:700;padding:6px 7px;border-radius:5px;
+  border:1px solid var(--line);background:var(--card);color:var(--muted);min-width:44px;
+}
+.ing-row .sw.on{background:var(--amber-soft);border-color:#ddd0a8;color:var(--amber)}
+.ing-row .del{flex:none;color:var(--muted);font-size:17px;padding:4px 6px}
+
+/* master list */
+.m-row{
+  display:flex;align-items:center;gap:11px;padding:12px 13px;
+  background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:7px;
+}
+.m-row .n{flex:1;font-size:14.5px;font-weight:600}
+.m-row .s{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:2px}
+
+/* misc */
+.empty{
+  text-align:center;padding:36px 20px;color:var(--muted);font-size:14px;
+  border:1px dashed var(--line);border-radius:10px;background:var(--card);
+}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:5px}
+.note{font-size:12px;color:var(--muted);margin:7px 0 0}
+.err{
+  background:#f6e5e3;color:var(--clay);padding:11px 13px;border-radius:7px;
+  font-size:13px;font-weight:600;margin-bottom:14px;
+}
+.sec{font-size:13px;font-weight:700;color:var(--muted);margin:22px 0 9px}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.gap{height:12px}
+.foot{display:flex;gap:9px;margin-top:22px}
+.foot button{flex:1;font-size:12.5px;padding:10px;border:1px solid var(--line);border-radius:7px;background:var(--card);font-weight:600;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ============ 今週 ============ -->
+<section class="screen on" id="s-week">
+  <div id="week-body"></div>
+</section>
+
+<!-- ============ 買い物 ============ -->
+<section class="screen" id="s-shop">
+  <h1>買い物リスト</h1>
+  <p class="lede" id="shop-lede">調味料は含みません。</p>
+  <div id="shop-body"></div>
+</section>
+
+<!-- ============ マスタ ============ -->
+<section class="screen" id="s-master">
+  <div class="bar">
+    <h1 style="margin:0">料理マスタ</h1>
+    <button class="mini" onclick="openAdd()">＋ 追加</button>
+  </div>
+  <div id="master-body"></div>
+  <p class="note" id="store-note" style="margin-top:18px"></p>
+  <div class="foot">
+    <button onclick="exportJson()">書き出し</button>
+    <button onclick="importJson()">読み込み</button>
+  </div>
+</section>
+
+<!-- ============ 登録 ============ -->
+<section class="screen" id="s-add">
+  <div class="bar">
+    <h1 style="margin:0" id="add-title">料理を追加</h1>
+    <div style="display:flex;gap:14px">
+      <button class="mini" onclick="go('master')">閉じる</button>
+      <button class="mini" style="font-weight:800" onclick="saveDish()">保存</button>
+    </div>
+  </div>
+  <div id="add-err"></div>
+
+  <label for="paste">概要欄を貼る</label>
+  <textarea id="paste" placeholder="YouTubeの概要欄をコピーして貼り付けてください。材料の行を読み取ります。"></textarea>
+  <button class="ghost" style="margin-top:8px" onclick="doParse()">材料を読み取る</button>
+  <p class="note">読み取り結果はあとから直せます。うまく分かれなかった行は手で修正してください。</p>
+
+  <label for="f-name">料理名</label>
+  <input type="text" id="f-name" placeholder="豚こまの生姜焼き">
+
+  <label for="f-url">動画URL</label>
+  <input type="url" id="f-url" placeholder="https://youtu.be/..." inputmode="url">
+
+  <label>どれくらいで作れる</label>
+  <div class="seg" id="f-level">
+    <button data-l="1" onclick="setLevel(1)">15分</button>
+    <button data-l="2" onclick="setLevel(2)">30分</button>
+    <button data-l="3" onclick="setLevel(3)">それ以上</button>
+  </div>
+
+  <label>材料</label>
+  <div id="ings"></div>
+  <button class="ghost" style="margin-top:8px" onclick="addIng('','',false)">行を足す</button>
+  <p class="note">「調味料」を押した行は買い物リストに出ません。</p>
+
+  <div class="gap"></div>
+  <div id="add-err2"></div>
+  <button class="primary" onclick="saveDish()">保存する</button>
+  <div style="height:40px"></div>
+</section>
+
+<nav>
+  <button class="on" data-t="week" onclick="go('week')"><span class="ico">🍚</span>今週</button>
+  <button data-t="shop" onclick="go('shop')"><span class="ico">🧺</span>買い物</button>
+  <button data-t="master" onclick="go('master')"><span class="ico">📋</span>料理</button>
+</nav>
+
+<script>
+/* ---------- 定数 ---------- */
+const SEASONING = ["醤油","しょうゆ","味噌","みそ","みりん","味醂","酒","砂糖","塩","こしょう","胡椒","コショウ","油","オイル","酢","だし","出汁","和風だし","顆粒","味の素","うま味","うまみ","ケチャップ","マヨネーズ","マヨ","ソース","オイスター","豆板醤","甜麺醤","коч","コチュジャン","鶏がら","鶏ガラ","コンソメ","バター","片栗粉","小麦粉","薄力粉","水","にんにくチューブ","生姜チューブ","しょうがチューブ","ごま油","ラー油","七味","一味","山椒","黒胡椒","粉チーズ","はちみつ","蜂蜜"];
+const MOODS = [
+  {k:1, t:"余裕なし",  d:"15分中心。ほぼ手をかけない週", slots:[1,1,1,2]},
+  {k:2, t:"ふつう",    d:"時短を軸に、1日だけ手をかける", slots:[1,1,2,3]},
+  {k:3, t:"作りたい",  d:"手間をかけられる週",           slots:[1,2,3,3]}
+];
+const LV = {1:{t:"15分",c:""},2:{t:"30分",c:"l2"},3:{t:"じっくり",c:"l3"}};
+
+/* ---------- 状態 ---------- */
+let master = [];
+let week = null;          // {dishes:[id...], checked:[key...], mood:1}
+let editing = null;       // 編集中のdish id
+let pickedLevel = 1;
+let tab = "week";
+
+/* ---------- 保存先 ---------- */
+/* 1) アーティファクト保存 → 2) 端末保存 → 3) 一時保存 の順に使えるものを選ぶ */
+let STORE = {mode:"none", label:"一時保存（閉じると消えます）"};
+
+async function initStore(){
+  try{
+    if(window.storage){
+      await window.storage.set("__probe","1");
+      STORE = {mode:"artifact", label:"この会話に保存中"};
+      return;
+    }
+  }catch(e){ /* 次へ */ }
+  try{
+    localStorage.setItem("__probe","1");
+    localStorage.removeItem("__probe");
+    STORE = {mode:"local", label:"この端末に保存中"};
+    return;
+  }catch(e){ /* 次へ */ }
+  STORE = {mode:"none", label:"一時保存（閉じると消えます）"};
+}
+
+async function put(key, val){
+  if(STORE.mode==="artifact"){
+    const r = await window.storage.set(key, val);
+    if(!r) throw new Error("保存先が応答しませんでした");
+    return;
+  }
+  if(STORE.mode==="local"){ localStorage.setItem("kondate:"+key, val); return; }
+  throw new Error("保存できる場所がありません");
+}
+async function pull(key){
+  if(STORE.mode==="artifact"){
+    const r = await window.storage.get(key);
+    return r ? r.value : null;
+  }
+  if(STORE.mode==="local"){ return localStorage.getItem("kondate:"+key); }
+  return null;
+}
+
+function jaError(e){
+  const m = (e && e.message) ? String(e.message) : String(e);
+  if(/not available|Storage is not/i.test(m)) return "この画面では保存機能が使えません";
+  if(/quota|QuotaExceeded/i.test(m))        return "保存できる容量を超えました。料理を減らすか書き出してください";
+  if(/応答/.test(m))                         return m;
+  if(/network|fetch|Load failed/i.test(m))  return "通信に失敗しました";
+  return m;
+}
+
+/* ---------- 読み書き ---------- */
+async function load(){
+  await initStore();
+  try{ const v = await pull("master"); master = v ? JSON.parse(v) : []; }catch(e){ master = []; }
+  try{ const v = await pull("current-week"); week = v ? JSON.parse(v) : null; }catch(e){ week = null; }
+  renderAll();
+}
+async function saveWeek(){
+  try{ await put("current-week", JSON.stringify(week)); }
+  catch(e){ /* 献立は再生成できるので黙って続行 */ }
+}
+
+/* ---------- 画面遷移 ---------- */
+function go(t){
+  tab = t;
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));
+  document.getElementById("s-"+t).classList.add("on");
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+  window.scrollTo(0,0);
+  renderAll();
+}
+function renderAll(){ renderWeek(); renderShop(); renderMaster(); }
+
+/* ---------- 今週 ---------- */
+function renderWeek(){
+  const el = document.getElementById("week-body");
+  if(master.length < 3){
+    el.innerHTML = `<h1>今週の4品</h1><p class="lede">まだ始められません。</p>
+      <div class="empty"><b>あと${3-master.length}品で使えます</b>
+      料理を3品登録すると、献立を引けるようになります。<br>概要欄を貼るだけで登録できます。</div>
+      <div class="gap"></div>
+      <button class="primary" onclick="openAdd()">料理を登録する</button>`;
+    return;
+  }
+  if(!week){
+    el.innerHTML = `<h1>今週の4品</h1><p class="lede">今週の気力を選ぶと、4品引きます。</p>
+      <div class="moods">${MOODS.map(m=>`
+        <button class="mood" data-k="${m.k}" onclick="pickMood(${m.k})">
+          <span class="bars">${[1,2,3].map(i=>`<i class="${i<=m.k?'f':''}"></i>`).join("")}</span>
+          <span><b>${m.t}</b><span>${m.d}</span></span>
+        </button>`).join("")}</div>
+      <button class="primary" id="gen" disabled onclick="generate()">4品を引く</button>`;
+    return;
+  }
+  const ds = week.dishes.map(id=>master.find(d=>d.id===id)).filter(Boolean);
+  if(!week.active) week.active = week.dishes.slice();
+  const act = week.active;
+  el.innerHTML = `<div class="bar"><h1 style="margin:0">今週の4品</h1>
+      <button class="mini" onclick="clearWeek()">引き直す</button></div>
+    <p class="lede">作らない日はチェックを外すと、買い物リストから消えます。</p>
+    ${ds.map(d=>dishCard(d)).join("")}
+    <div class="gap"></div>
+    <button class="ghost" onclick="go('shop')">買い物リストを見る（${act.length}品）</button>`;
+}
+function dishCard(d){
+  const on = week.active.includes(d.id);
+  return `<div class="dish ${on?'':'off'}">
+    <div class="top">
+      <input type="checkbox" class="chk" ${on?'checked':''} onchange="toggleActive('${d.id}')" aria-label="今週作る">
+      <div><div class="name">${esc(d.name)}</div>
+        <div class="meta">${d.ings.filter(i=>!i.s).slice(0,4).map(i=>esc(i.n)).join("・")||"材料なし"}</div></div>
+      <span class="tag ${LV[d.level].c}">${LV[d.level].t}</span>
+    </div>
+    <div class="acts">
+      <button onclick="reroll('${d.id}')">これを引き直す</button>
+      ${d.url?`<a href="${esc(d.url)}" target="_blank" rel="noopener">作り方を見る</a>`:""}
+    </div></div>`;
+}
+function pickMood(k){
+  document.querySelectorAll(".mood").forEach(b=>b.classList.toggle("sel", +b.dataset.k===k));
+  const g = document.getElementById("gen");
+  g.disabled = false; g.dataset.k = k;
+}
+function generate(){
+  const k = +document.getElementById("gen").dataset.k;
+  const slots = MOODS.find(m=>m.k===k).slots;
+  const picked = [];
+  slots.forEach(lv=>{
+    const pool = master.filter(d=>d.level<=lv && !picked.includes(d.id));
+    const alt  = master.filter(d=>!picked.includes(d.id));
+    const src = pool.length ? pool : alt;
+    if(src.length) picked.push(src[Math.floor(Math.random()*src.length)].id);
+  });
+  week = {dishes:picked, active:picked.slice(), checked:[], mood:k};
+  saveWeek(); renderAll();
+}
+function toggleActive(id){
+  const i = week.active.indexOf(id);
+  if(i<0) week.active.push(id); else week.active.splice(i,1);
+  saveWeek(); renderAll();
+}
+function reroll(id){
+  const i = week.dishes.indexOf(id);
+  const pool = master.filter(d=>!week.dishes.includes(d.id));
+  if(!pool.length){ alert("入れ替えられる料理がありません。マスタに追加してください。"); return; }
+  const nid = pool[Math.floor(Math.random()*pool.length)].id;
+  const a = week.active.indexOf(id);
+  week.dishes[i] = nid;
+  if(a<0) week.active.push(nid); else week.active[a] = nid;
+  week.checked = [];
+  saveWeek(); renderAll();
+}
+function clearWeek(){ week = null; saveWeek(); renderAll(); }
+
+/* ---------- 買い物 ---------- */
+function renderShop(){
+  const el = document.getElementById("shop-body");
+  if(!week){ el.innerHTML = `<div class="empty"><b>まだ献立がありません</b>今週の4品を引くとリストが出ます。</div>`; return; }
+  const active = week.active || week.dishes;
+  if(!active.length){ el.innerHTML = `<div class="empty"><b>作る料理が選ばれていません</b>「今週」で作る料理にチェックを入れてください。</div>`; return; }
+  const map = {};
+  active.forEach(id=>{
+    const d = master.find(x=>x.id===id); if(!d) return;
+    d.ings.filter(i=>!i.s && i.n.trim()).forEach(i=>{
+      const key = i.n.trim();
+      (map[key] = map[key] || []).push(i.a || "");
+    });
+  });
+  const lede = document.getElementById("shop-lede");
+  if(lede) lede.textContent = `${active.length}品分。調味料は含みません。`;
+  const keys = Object.keys(map);
+  if(!keys.length){ el.innerHTML = `<div class="empty"><b>材料が登録されていません</b>料理マスタで材料を追加してください。</div>`; return; }
+  el.innerHTML = keys.map(k=>{
+    const on = week.checked.includes(k);
+    const amt = map[k].filter(Boolean).join(" ＋ ");
+    return `<label class="shop-item ${on?'done':''}">
+      <input type="checkbox" ${on?'checked':''} onchange="toggleBuy('${esc(k).replace(/'/g,"\\'")}')">
+      <span class="n">${esc(k)}${amt?`<span class="a">${esc(amt)}</span>`:""}</span></label>`;
+  }).join("") + `<div class="gap"></div><button class="ghost" onclick="resetCheck()">チェックを全部外す</button>`;
+}
+function toggleBuy(k){
+  const i = week.checked.indexOf(k);
+  if(i<0) week.checked.push(k); else week.checked.splice(i,1);
+  saveWeek(); renderShop();
+}
+function resetCheck(){ week.checked=[]; saveWeek(); renderShop(); }
+
+/* ---------- マスタ ---------- */
+function renderMaster(){
+  const note = document.getElementById("store-note");
+  if(note) note.textContent = STORE.label + (STORE.mode==="none" ? "。書き出しでファイルに残せます。" : "");
+  const el = document.getElementById("master-body");
+  if(!master.length){ el.innerHTML = `<div class="empty"><b>まだ1品もありません</b>概要欄を貼れば、材料は自動で読み取ります。</div>`; return; }
+  el.innerHTML = master.map(d=>`<div class="m-row">
+    <span class="n">${esc(d.name)}<span class="s">${LV[d.level].t}・材料${d.ings.length}件</span></span>
+    <button class="mini" onclick="openAdd('${d.id}')">編集</button>
+    <button class="mini" style="color:var(--clay)" onclick="delDish('${d.id}')">削除</button>
+  </div>`).join("");
+}
+async function delDish(id){
+  const d = master.find(x=>x.id===id);
+  if(!confirm(`「${d.name}」を削除します。`)) return;
+  master = master.filter(x=>x.id!==id);
+  try{ await put("master", JSON.stringify(master)); }catch(e){}
+  if(week){ week.dishes = week.dishes.filter(x=>x!==id); if(!week.dishes.length) week=null; saveWeek(); }
+  renderAll();
+}
+
+/* ---------- 登録画面 ---------- */
+function openAdd(id){
+  editing = id || null;
+  clearErr();
+  document.getElementById("paste").value = "";
+  document.getElementById("ings").innerHTML = "";
+  if(id){
+    const d = master.find(x=>x.id===id);
+    document.getElementById("add-title").textContent = "料理を編集";
+    document.getElementById("f-name").value = d.name;
+    document.getElementById("f-url").value = d.url || "";
+    setLevel(d.level);
+    d.ings.forEach(i=>addIng(i.n, i.a, i.s));
+  }else{
+    document.getElementById("add-title").textContent = "料理を追加";
+    document.getElementById("f-name").value = "";
+    document.getElementById("f-url").value = "";
+    setLevel(1);
+    addIng("","",false);
+  }
+  go("add");
+}
+function setLevel(l){
+  pickedLevel = l;
+  document.querySelectorAll("#f-level button").forEach(b=>b.classList.toggle("sel", +b.dataset.l===l));
+}
+function addIng(n,a,s){
+  const wrap = document.createElement("div");
+  wrap.className = "ing-row";
+  wrap.innerHTML = `<input type="text" class="nm" placeholder="材料名" value="${esc(n||"")}">
+    <input type="text" class="amt" placeholder="分量" value="${esc(a||"")}">
+    <button class="sw ${s?'on':''}" onclick="this.classList.toggle('on')">調味料</button>
+    <button class="del" onclick="this.parentNode.remove()" aria-label="削除">×</button>`;
+  document.getElementById("ings").appendChild(wrap);
+}
+
+/* ---------- パーサ ---------- */
+function doParse(){
+  const raw = document.getElementById("paste").value;
+  clearErr();
+  if(!raw.trim()){ showErr("貼り付けてから押してください。"); return; }
+
+  const lines = raw.split(/\r?\n/);
+  let start = -1;
+  for(let i=0;i<lines.length;i++){
+    if(/材\s*料/.test(lines[i])){ start = i+1; break; }
+  }
+  let body;
+  if(start >= 0){
+    body = [];
+    let seen = false;
+    for(let i=start;i<lines.length;i++){
+      const l = lines[i].trim();
+      if(/作り方|手順|レシピ|チャンネル|登録|▼|■|https?:\/\//.test(l)) break;
+      if(!l){ if(seen) break; else continue; }
+      seen = true; body.push(l);
+    }
+  }else{
+    body = lines.map(l=>l.trim()).filter(l=>l && !/https?:\/\//.test(l));
+  }
+
+  if(!body.length){ showErr("材料の行が見つかりませんでした。手で入力してください。"); return; }
+
+  document.getElementById("ings").innerHTML = "";
+  body.forEach(line=>{
+    const c = line.replace(/^[・\-–—●○■◆▪\*\s　]+/,"").trim();
+    if(!c) return;
+    const m = c.match(/^(.+?)[\s　]+((?:[0-9０-９]|大さじ|小さじ|カップ|適量|少々|少量|多め|お好み|ひとつまみ|一つまみ|ひとかけ|一片|適宜|全量).*)$/);
+    const n = m ? m[1].trim() : c;
+    const a = m ? m[2].trim() : "";
+    addIng(n, a, isSeasoning(n));
+  });
+  const nameEl = document.getElementById("f-name");
+  if(!nameEl.value){
+    const t = lines.find(l=>l.trim() && !/材\s*料|https?:\/\//.test(l));
+    if(t) nameEl.value = t.trim().slice(0,30);
+  }
+  document.getElementById("paste").value = "";
+}
+function isSeasoning(n){
+  const s = n.replace(/[\s　()（）]/g,"");
+  return SEASONING.some(k=>s.includes(k));
+}
+
+/* ---------- 保存 ---------- */
+async function saveDish(){
+  try{
+    let name = document.getElementById("f-name").value.trim();
+    if(!name){
+      const first = [...document.querySelectorAll("#ings .nm")].map(i=>i.value.trim()).filter(Boolean)[0];
+      name = first ? first + "の料理" : "名前のない料理" + (master.length+1);
+    }
+    clearErr();
+    const ings = [...document.querySelectorAll("#ings .ing-row")].map(r=>({
+      n: r.querySelector(".nm").value.trim(),
+      a: r.querySelector(".amt").value.trim(),
+      s: r.querySelector(".sw").classList.contains("on")
+    })).filter(i=>i.n);
+
+    const url = document.getElementById("f-url").value.trim();
+    if(editing){
+      const d = master.find(x=>x.id===editing);
+      if(!d) throw new Error("編集する料理が見つかりませんでした");
+      Object.assign(d, {name, url, level:pickedLevel, ings});
+    }else{
+      master.push({id:"d"+Date.now()+Math.floor(Math.random()*999), name, url, level:pickedLevel, ings});
+    }
+
+    try{
+      await put("master", JSON.stringify(master));
+      go("master");
+    }catch(e){
+      /* 保存先がなくても、今開いている間は使えるようにする */
+      go("master");
+      setTimeout(()=>alert("登録しました。ただし" + jaError(e) + "。\nアプリを閉じると消えるので、「料理」画面の「書き出し」でファイルに残してください。"), 80);
+    }
+  }catch(e){
+    showErr(jaError(e));
+  }
+}
+function showErr(msg){
+  const h = `<div class="err">${esc(msg)}</div>`;
+  document.getElementById("add-err").innerHTML = h;
+  document.getElementById("add-err2").innerHTML = h;
+}
+function clearErr(){
+  document.getElementById("add-err").innerHTML = "";
+  document.getElementById("add-err2").innerHTML = "";
+}
+
+/* ---------- 入出力 ---------- */
+function exportJson(){
+  const blob = new Blob([JSON.stringify(master,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "kondate-master.json";
+  a.click();
+}
+function importJson(){
+  const i = document.createElement("input");
+  i.type="file"; i.accept="application/json";
+  i.onchange = async ()=>{
+    try{
+      const txt = await i.files[0].text();
+      const arr = JSON.parse(txt);
+      if(!Array.isArray(arr)) throw new Error();
+      master = arr;
+      try{ await put("master", JSON.stringify(master)); }catch(e){}
+      renderAll();
+    }catch(e){ alert("読み込めませんでした。書き出したファイルを選んでください。"); }
+  };
+  i.click();
+}
+
+function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+load();
+</script>
+</body>
+</html>
