@@ -167,12 +167,14 @@ textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
 .cand .sub{font-size:12.5px;color:var(--muted);margin:0 0 13px}
 .cand ul{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
 .cand li{
-  display:flex;justify-content:space-between;gap:12px;
+  display:flex;justify-content:space-between;gap:12px;align-items:baseline;
   padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;
 }
-.cand li.s{color:var(--muted);font-size:12.5px}
-.cand li b{font-weight:600}
-.cand li span{color:var(--muted);font-size:12.5px;flex:none}
+.cand li b{font-weight:600;flex:1;min-width:0}
+.cand li span{color:var(--muted);font-size:12.5px;flex:none;text-align:right}
+.cand li.s{display:block;color:var(--muted);font-size:12.5px}
+.cand li.s b{display:block;margin-bottom:3px;font-size:12px}
+.cand li.s span{display:block;text-align:left;line-height:1.6}
 .judge{display:flex;gap:9px;align-items:stretch}
 .judge button{
   flex:1;padding:15px 4px;border-radius:10px;font-size:15px;font-weight:700;
@@ -442,7 +444,7 @@ function dishCard(d){
   const on = week.active.includes(d.id);
   const link = d.url
     ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">作り方を見る</a>`
-    : `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(d.name + " レシピ")}" target="_blank" rel="noopener">作り方を検索する</a>`;
+    : `<a href="https://www.google.com/search?q=${encodeURIComponent(d.name + " レシピ 作り方")}" target="_blank" rel="noopener">作り方を検索する</a>`;
   return `<div class="dish ${on?'':'off'}">
     ${d.img?`<img class="thumb" src="${esc(d.img)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
     <div class="top">
@@ -456,6 +458,21 @@ function dishCard(d){
       ${link}
     </div></div>`;
 }
+function byId(id){ return master.find(d=>d.id===id); }
+
+/* 料理名の主要語が重なっていたら「似ている」とみなす */
+function tooSimilar(a, b){
+  if(!a || !b) return false;
+  const key = s => String(s).replace(/[!！♪☆★♡、。\s　]/g,"");
+  const x = key(a.name), y = key(b.name);
+  for(let n=3; n<=Math.min(x.length, y.length); n++){
+    for(let i=0; i+n<=x.length; i++){
+      if(y.includes(x.slice(i, i+n))) return true;
+    }
+  }
+  return false;
+}
+
 function pickMood(k){
   document.querySelectorAll(".mood").forEach(b=>b.classList.toggle("sel", +b.dataset.k===k));
   const g = document.getElementById("gen");
@@ -465,10 +482,12 @@ function generate(){
   const k = +document.getElementById("gen").dataset.k;
   const slots = MOODS.find(m=>m.k===k).slots;
   const picked = [];
+  const fresh = d => !picked.some(id => tooSimilar(byId(id), d));
   slots.forEach(lv=>{
-    const pool = master.filter(d=>d.level<=lv && !picked.includes(d.id));
-    const alt  = master.filter(d=>!picked.includes(d.id));
-    const src = pool.length ? pool : alt;
+    const strict = master.filter(d=>d.level<=lv && !picked.includes(d.id) && fresh(d));
+    const loose  = master.filter(d=>!picked.includes(d.id) && fresh(d));
+    const any    = master.filter(d=>!picked.includes(d.id));
+    const src = strict.length ? strict : (loose.length ? loose : any);
     if(src.length) picked.push(src[Math.floor(Math.random()*src.length)].id);
   });
   week = {dishes:picked, active:picked.slice(), checked:[], mood:k};
@@ -776,7 +795,9 @@ function renderFind(){
         <button class="no" onclick="judge(false)">見送る</button>
         <button class="yes" onclick="judge(true)">作りたい</button>
       </div>
-      <p class="prog">残り${cards.length}件${adopted?`・${adopted}品を追加済み`:""}</p>`;
+      <p class="prog">残り${cards.length}件${adopted?`・${adopted}品を追加済み`:""}</p>
+      <div class="gap"></div>
+      <button class="ghost" onclick="backToDecks()">← ${esc(deckId)}をやめて束を選び直す</button>`;
     return;
   }
 
@@ -797,11 +818,19 @@ function cardHtml(c){
     <h2>${esc(c.name)}</h2>
     <p class="sub">${esc(LV[c.level].t)}${c.cost?`・${esc(c.cost)}`:""}</p>
     <ul>
-      ${ing.map(i=>`<li><b>${esc(i.n)}</b><span>${esc(i.a)}</span></li>`).join("")}
+      ${ing.map(i=>`<li><b>${esc(i.n)}</b>${i.a?`<span>${esc(i.a)}</span>`:""}</li>`).join("")}
       ${sea.length?`<li class="s"><b>調味料</b><span>${sea.map(i=>esc(i.n)).join("・")}</span></li>`:""}
     </ul>
     ${c.url?`<p class="note" style="margin-top:11px"><a href="${esc(c.url)}" target="_blank" rel="noopener" style="color:var(--moss);font-weight:700">作り方を見る</a></p>`:""}
   </div>`;
+}
+
+function backToDecks(){
+  cards = [];
+  deckId = null;
+  lastAct = null;
+  document.getElementById("find-err").innerHTML = "";
+  renderFind();
 }
 
 async function openDeck(id){
@@ -818,16 +847,29 @@ async function openDeck(id){
     const all = await getCats();
     if(!all.length) throw new Error("カテゴリを取得できませんでした");
     const hit = deck.k.length ? all.filter(c => deck.k.some(k => String(c.categoryName).includes(k))) : [];
-    const pool = hit.length ? hit : all;
+    const safe = all.filter(c => !isNgCat(c.categoryName));
+    const pool = hit.length ? hit : (safe.length ? safe : all);
     const pick = pool[Math.floor(Math.random()*pool.length)];
     const rank = await rkGet(RK_RANK, {categoryId: pick.rankId});
-    cards = (rank.result||[]).filter(r=>!skip(r.recipeTitle)).map(toCard);
+    cards = (rank.result||[])
+      .filter(r=>!skip(r.recipeTitle))
+      .map(toCard)
+      .filter(isDish);
     if(!cards.length) throw new Error("新しい料理が見つかりませんでした。もう一度お試しください");
   }catch(e){
     cards = [];
     document.getElementById("find-err").innerHTML = `<div class="err">${esc(rkError(e))}</div>`;
   }
   loadingFind = false; renderFind();
+}
+
+/* たれ・ソース・お菓子など、主菜にならないものを弾く */
+const NG_TITLE = ["たれ","タレ","ソース","ドレッシング","ジャム","飴","あめ","シロップ",
+  "ケーキ","クッキー","プリン","アイス","チョコ","ドーナツ","マフィン","スムージー"];
+
+function isDish(c){
+  if(NG_TITLE.some(k => c.name.includes(k))) return false;
+  return c.ings.filter(i=>!i.s).length >= 2;   // 主材料が2品以上
 }
 
 function toCard(r){
@@ -886,6 +928,17 @@ async function throttle(){
   const since = Date.now() - lastCall;
   if(since < GAP) await wait(GAP - since);
   lastCall = Date.now();
+}
+
+/* 主菜として出したくないカテゴリ */
+const NG_CAT = ["お菓子","菓子","デザート","スイーツ","ケーキ","クッキー","タルト","プリン",
+  "アイス","チョコ","ドーナツ","マフィン","シフォン","パウンド","和菓子","もち","団子",
+  "パン","食パン","菓子パン","ドリンク","飲み物","ジュース","スムージー","コーヒー","お茶",
+  "ジャム","ソース","ドレッシング","たれ","調味料","離乳食","ペット","飴","あめ","ゼリー"];
+
+function isNgCat(name){
+  const n = String(name||"");
+  return NG_CAT.some(k => n.includes(k));
 }
 
 let rkMode = null;   // "header" か "query"。成功した方を覚える
