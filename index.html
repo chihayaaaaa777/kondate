@@ -888,17 +888,56 @@ async function throttle(){
   lastCall = Date.now();
 }
 
+let rkMode = null;   // "header" か "query"。成功した方を覚える
+
+async function rkTry(base, params, mode){
+  const p = Object.assign({applicationId:appId, format:"json"}, params);
+  const opt = {};
+  if(mode === "header"){
+    opt.headers = {"accessKey": accKey};
+  }else{
+    p.accessKey = accKey;
+  }
+  const res = await fetch(base + "?" + new URLSearchParams(p), opt);
+  if(res.ok) return res.json();
+  let detail = "";
+  try{
+    const t = (await res.text()).slice(0, 300);
+    if(t) detail = " " + t.replace(/\s+/g," ").trim();
+  }catch(e){}
+  const err = new Error("HTTP " + res.status + detail);
+  err.status = res.status;
+  throw err;
+}
+
 async function rkGet(base, params, retried){
   await throttle();
-  const q = new URLSearchParams(Object.assign({applicationId:appId, accessKey:accKey, format:"json"}, params));
-  const res = await fetch(base + "?" + q);
-  if(res.status === 429){
-    if(retried) throw new Error("HTTP 429");
-    await wait(2500);
-    return rkGet(base, params, true);
+
+  const order = rkMode ? [rkMode] : ["header", "query"];
+  let first = null;
+
+  for(const mode of order){
+    try{
+      const json = await rkTry(base, params, mode);
+      rkMode = mode;
+      return json;
+    }catch(e){
+      if(e.status === 429){
+        if(retried) throw e;
+        await wait(2500);
+        return rkGet(base, params, true);
+      }
+      if(!first) first = e;
+      if(order.length > 1) await wait(GAP);
+    }
   }
-  if(!res.ok) throw new Error("HTTP " + res.status);
-  return res.json();
+
+  if(!rkMode && order.length > 1){
+    const e = new Error("ヘッダー方式・クエリ方式のどちらも失敗しました。" + first.message);
+    e.status = first.status;
+    throw e;
+  }
+  throw first;
 }
 
 /* カテゴリ一覧は変わらないので端末に保存して使い回す */
@@ -918,7 +957,7 @@ async function getCats(){
 
 function rkError(e){
   const m = String((e && e.message) || e);
-  if(/HTTP 40[03]/.test(m)) return "楽天に拒否されました。アプリIDと、許可されたWebサイトの設定を確認してください";
+  if(/HTTP 40[03]/.test(m)) return "楽天に拒否されました。" + m;
   if(/HTTP 404/.test(m))    return "楽天のAPIが見つかりませんでした。仕様が変わった可能性があります";
   if(/HTTP 429/.test(m))    return "楽天側の回数制限に達しました。30秒ほど待ってからもう一度お試しください";
   if(/Failed to fetch|Load failed|NetworkError/i.test(m)) return "通信できませんでした。オフラインか、楽天側の制限が原因です";
