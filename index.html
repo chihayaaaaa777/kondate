@@ -820,7 +820,7 @@ async function openDeck(id){
     const hit = deck.k.length ? all.filter(c => deck.k.some(k => String(c.categoryName).includes(k))) : [];
     const pool = hit.length ? hit : all;
     const pick = pool[Math.floor(Math.random()*pool.length)];
-    const rank = await rkGet(RK_RANK, {categoryId: pick.categoryId});
+    const rank = await rkGet(RK_RANK, {categoryId: pick.rankId});
     cards = (rank.result||[]).filter(r=>!skip(r.recipeTitle)).map(toCard);
     if(!cards.length) throw new Error("新しい料理が見つかりませんでした。もう一度お試しください");
   }catch(e){
@@ -946,11 +946,17 @@ async function getCats(){
   if(catCache) return catCache;
   try{
     const v = await pull("rakuten-cats");
-    if(v){ catCache = JSON.parse(v); if(catCache.length) return catCache; }
+    if(v){
+      const c = JSON.parse(v);
+      if(c.length && c[0].rankId){ catCache = c; return catCache; }
+    }
   }catch(e){}
   const cat = await rkGet(RK_CAT, {categoryType:"medium"});
-  catCache = ((cat.result && cat.result.medium) || [])
-    .map(c=>({categoryId:c.categoryId, categoryName:c.categoryName}));
+  catCache = ((cat.result && cat.result.medium) || []).map(c=>({
+    categoryName: c.categoryName,
+    /* 中カテゴリのランキング取得には「大ID-中ID」の連結が必要 */
+    rankId: (c.parentCategoryId ? c.parentCategoryId + "-" : "") + c.categoryId
+  }));
   try{ await put("rakuten-cats", JSON.stringify(catCache)); }catch(e){}
   return catCache;
 }
