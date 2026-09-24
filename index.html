@@ -140,6 +140,16 @@ textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
 .m-row .n{flex:1;font-size:14.5px;font-weight:600}
 .m-row .s{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:2px}
 
+/* 写真 */
+.thumb{
+  width:100%;aspect-ratio:16/10;object-fit:cover;display:block;
+  border-radius:9px;background:var(--line);margin-bottom:12px;
+}
+.thumb-s{
+  width:52px;height:52px;object-fit:cover;border-radius:7px;
+  background:var(--line);flex:none;
+}
+
 /* 候補カード */
 .deck{display:grid;gap:9px;margin-bottom:6px}
 .deck button{
@@ -241,7 +251,9 @@ textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
 
   <label for="f-appid">楽天アプリID</label>
   <input type="text" id="f-appid" placeholder="楽天ウェブサービスで発行したID" autocomplete="off">
-  <p class="note">「探す」で料理を検索するのに使います。入力すると端末に保存され、次回から不要です。</p>
+  <label for="f-acckey">アクセスキー</label>
+  <input type="text" id="f-acckey" placeholder="pk_ で始まるキー" autocomplete="off">
+  <p class="note">どちらも「探す」で料理を検索するのに使います。入力すると端末に保存され、次回から不要です。</p>
   <button class="ghost" style="margin-top:8px" onclick="saveAppId()">保存する</button>
   <div id="set-msg"></div>
 
@@ -401,7 +413,7 @@ function renderWeek(){
   if(master.length < 3){
     el.innerHTML = `<h1>今週の4品</h1><p class="lede">まだ始められません。</p>
       <div class="empty"><b>あと${3-master.length}品で使えます</b>
-      料理を3品えらぶと、献立を引けるようになります。<br>定番の束から1品ずつ選べます。</div>
+      料理を3品えらぶと、献立を引けるようになります。<br>「探す」で1品ずつ選べます。</div>
       <div class="gap"></div>
       <button class="primary" onclick="go('find')">料理を選ぶ</button>`;
     return;
@@ -428,7 +440,11 @@ function renderWeek(){
 }
 function dishCard(d){
   const on = week.active.includes(d.id);
+  const link = d.url
+    ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">作り方を見る</a>`
+    : `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(d.name + " レシピ")}" target="_blank" rel="noopener">作り方を検索する</a>`;
   return `<div class="dish ${on?'':'off'}">
+    ${d.img?`<img class="thumb" src="${esc(d.img)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
     <div class="top">
       <input type="checkbox" class="chk" ${on?'checked':''} onchange="toggleActive('${d.id}')" aria-label="今週作る">
       <div><div class="name">${esc(d.name)}</div>
@@ -437,7 +453,7 @@ function dishCard(d){
     </div>
     <div class="acts">
       <button onclick="reroll('${d.id}')">これを引き直す</button>
-      ${d.url?`<a href="${esc(d.url)}" target="_blank" rel="noopener">作り方を見る</a>`:""}
+      ${link}
     </div></div>`;
 }
 function pickMood(k){
@@ -516,6 +532,7 @@ function renderMaster(){
   const el = document.getElementById("master-body");
   if(!master.length){ el.innerHTML = `<div class="empty"><b>まだ1品もありません</b>概要欄を貼れば、材料は自動で読み取ります。</div>`; return; }
   el.innerHTML = master.map(d=>`<div class="m-row">
+    ${d.img?`<img class="thumb-s" src="${esc(d.img)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
     <span class="n">${esc(d.name)}<span class="s">${LV[d.level].t}・材料${d.ings.length}件</span></span>
     <button class="mini" onclick="openAdd('${d.id}')">編集</button>
     <button class="mini" style="color:var(--clay)" onclick="delDish('${d.id}')">削除</button>
@@ -633,7 +650,7 @@ async function saveDish(){
     if(editing){
       const d = master.find(x=>x.id===editing);
       if(!d) throw new Error("編集する料理が見つかりませんでした");
-      Object.assign(d, {name, url, level:pickedLevel, ings});
+      Object.assign(d, {name, url, level:pickedLevel, ings, img:d.img||""});
     }else{
       master.push({id:"d"+Date.now()+Math.floor(Math.random()*999), name, url, level:pickedLevel, ings});
     }
@@ -688,59 +705,48 @@ function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&
 
 /* ================= 設定 ================= */
 let appId = "";
+let accKey = "";
 
 async function loadAppId(){
-  try{ appId = (await pull("rakuten-id")) || ""; }catch(e){ appId = ""; }
-  const f = document.getElementById("f-appid");
-  if(f) f.value = appId;
+  try{ appId  = (await pull("rakuten-id"))  || ""; }catch(e){ appId  = ""; }
+  try{ accKey = (await pull("rakuten-key")) || ""; }catch(e){ accKey = ""; }
+  const a = document.getElementById("f-appid");  if(a) a.value = appId;
+  const b = document.getElementById("f-acckey"); if(b) b.value = accKey;
 }
+function hasKeys(){ return !!(appId && accKey); }
+
 async function saveAppId(){
-  const v = document.getElementById("f-appid").value.trim();
-  appId = v;
+  appId  = document.getElementById("f-appid").value.trim();
+  accKey = document.getElementById("f-acckey").value.trim();
   const msg = document.getElementById("set-msg");
   try{
-    await put("rakuten-id", v);
-    msg.innerHTML = `<p class="note" style="color:var(--moss);font-weight:700">保存しました。</p>`;
+    await put("rakuten-id", appId);
+    await put("rakuten-key", accKey);
+    msg.innerHTML = hasKeys()
+      ? `<p class="note" style="color:var(--moss);font-weight:700">保存しました。「探す」から料理を選べます。</p>`
+      : `<p class="note" style="color:var(--clay);font-weight:700">保存しましたが、どちらか一方が空です。両方入れてください。</p>`;
   }catch(e){
     msg.innerHTML = `<div class="err">${esc(jaError(e))}</div>`;
   }
+  renderAll();
 }
 
-/* ================= 定番15品 ================= */
-const PRESET = [
-  {name:"豚の生姜焼き", level:1, ings:[["豚ロース薄切り","300g"],["玉ねぎ","1個"],["しょうが","1かけ"]]},
-  {name:"鶏の照り焼き", level:1, ings:[["鶏もも肉","2枚"],["長ねぎ","1本"]]},
-  {name:"親子丼", level:1, ings:[["鶏もも肉","1枚"],["玉ねぎ","1個"],["卵","3個"],["三つ葉","少量"]]},
-  {name:"肉じゃが", level:3, ings:[["牛こま切れ肉","200g"],["じゃがいも","3個"],["にんじん","1本"],["玉ねぎ","1個"],["糸こんにゃく","1袋"]]},
-  {name:"鮭のバター醤油焼き", level:1, ings:[["生鮭","2切れ"],["しめじ","1株"]]},
-  {name:"豚バラ大根", level:2, ings:[["豚バラ薄切り","200g"],["大根","1/2本"]]},
-  {name:"麻婆豆腐", level:2, ings:[["豚ひき肉","200g"],["木綿豆腐","1丁"],["長ねぎ","1/2本"],["にんにく","1かけ"]]},
-  {name:"回鍋肉", level:1, ings:[["豚バラ薄切り","200g"],["キャベツ","1/4個"],["ピーマン","2個"]]},
-  {name:"ガパオライス", level:1, ings:[["鶏ひき肉","250g"],["パプリカ","1個"],["バジル","1パック"],["卵","2個"]]},
-  {name:"青椒肉絲", level:2, ings:[["豚こま切れ肉","200g"],["ピーマン","4個"],["たけのこ水煮","150g"]]},
-  {name:"鶏肉のトマト煮", level:3, ings:[["鶏もも肉","2枚"],["カットトマト缶","1缶"],["玉ねぎ","1個"],["しめじ","1株"]]},
-  {name:"ペペロンチーノ", level:1, ings:[["スパゲッティ","200g"],["にんにく","2かけ"],["鷹の爪","2本"]]},
-  {name:"ナポリタン", level:1, ings:[["スパゲッティ","200g"],["ウインナー","4本"],["ピーマン","2個"],["玉ねぎ","1/2個"]]},
-  {name:"ハンバーグ", level:3, ings:[["合いびき肉","400g"],["玉ねぎ","1個"],["卵","1個"],["パン粉","1/2カップ"],["牛乳","大さじ3"]]},
-  {name:"豚汁", level:2, ings:[["豚バラ薄切り","150g"],["大根","1/4本"],["にんじん","1/2本"],["ごぼう","1/2本"],["長ねぎ","1/2本"],["木綿豆腐","1/2丁"]]}
-];
-
 /* ================= 料理を探す ================= */
-const RK_CAT  = "https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426";
-const RK_RANK = "https://app.rakuten.co.jp/services/api/Recipe/CategoryRanking/20170426";
+const RK_CAT  = "https://openapi.rakuten.co.jp/recipems/api/Recipe/CategoryList/20170426";
+const RK_RANK = "https://openapi.rakuten.co.jp/recipems/api/Recipe/CategoryRanking/20170426";
 const DECKS = [
-  {id:"preset", t:"定番",    d:"まずはここから。和洋中の15品"},
-  {id:"和食",   t:"和食",    d:"煮物・焼き魚・丼", k:["肉じゃが","生姜焼き","照り焼き","煮物","丼"]},
-  {id:"中華",   t:"中華",    d:"麻婆・回鍋肉・炒めもの", k:["麻婆","回鍋肉","青椒肉絲","チャーハン","餃子"]},
-  {id:"洋食",   t:"洋食",    d:"パスタ・煮込み・ソテー", k:["パスタ","ハンバーグ","グラタン","トマト煮","ソテー"]},
-  {id:"麺丼",   t:"麺・丼",  d:"一皿で完結するもの", k:["うどん","焼きそば","丼","ラーメン","そうめん"]}
+  {id:"和食", t:"和食",   d:"煮物・焼き魚・丼",       k:["肉じゃが","生姜焼き","照り焼き","煮物","丼"]},
+  {id:"中華", t:"中華",   d:"麻婆・回鍋肉・炒めもの", k:["麻婆","回鍋肉","青椒肉絲","チャーハン","餃子"]},
+  {id:"洋食", t:"洋食",   d:"パスタ・煮込み・ソテー", k:["パスタ","ハンバーグ","グラタン","トマト煮","ソテー"]},
+  {id:"麺丼", t:"麺・丼", d:"一皿で完結するもの",     k:["うどん","焼きそば","丼","ラーメン","そうめん"]},
+  {id:"おまかせ", t:"おまかせ", d:"全カテゴリからランダムに", k:[]}
 ];
 
-let cards = [];       // 候補の束
+let cards = [];
 let deckId = null;
-let lastAct = null;   // {type:"yes"|"no", card, index}
+let lastAct = null;
 let adopted = 0;
-let rejected = [];    // 見送った料理名
+let rejected = [];
 let loadingFind = false;
 
 async function loadRejected(){
@@ -753,6 +759,14 @@ function renderFind(){
   const el = document.getElementById("find-body");
   if(!el) return;
   if(loadingFind){ el.innerHTML = `<div class="empty">候補を探しています…</div>`; return; }
+
+  if(!hasKeys()){
+    el.innerHTML = `<div class="empty"><b>楽天の設定が必要です</b>
+      アプリIDとアクセスキーを登録すると、料理を選べるようになります。</div>
+      <div class="gap"></div>
+      <button class="primary" onclick="go('settings')">設定を開く</button>`;
+    return;
+  }
 
   if(cards.length){
     const c = cards[0];
@@ -767,18 +781,21 @@ function renderFind(){
   }
 
   const done = deckId ? `<div class="empty"><b>この束は見終わりました</b>
-      ${adopted?`${adopted}品をマスタに追加しました。`:"追加した料理はありません。"}</div><div class="gap"></div>` : "";
-  el.innerHTML = done + `<p class="lede">見たい束を選ぶと、1品ずつ出てきます。</p>
+      ${adopted?`${adopted}品をマスタに追加しました。`:"追加した料理はありません。"}</div>
+      <div class="gap"></div>
+      <button class="ghost" onclick="openDeck('${deckId}')">同じ束からもう一度引く</button>
+      <div class="gap"></div>` : "";
+  el.innerHTML = done + `<p class="lede">束を選ぶと、1品ずつ出てきます。</p>
     <div class="deck">${DECKS.map(d=>`
-      <button onclick="openDeck('${d.id}')"><span>${d.t}<br><small>${d.d}</small></span><span style="color:var(--muted)">→</span></button>`).join("")}</div>
-    ${appId ? "" : `<p class="note">定番以外を見るには、設定で楽天アプリIDの登録が必要です。</p>`}`;
+      <button onclick="openDeck('${d.id}')"><span>${d.t}<br><small>${d.d}</small></span><span style="color:var(--muted)">→</span></button>`).join("")}</div>`;
 }
 
 function cardHtml(c){
   const ing = c.ings.filter(i=>!i.s), sea = c.ings.filter(i=>i.s);
   return `<div class="cand">
+    ${c.img?`<img class="thumb" src="${esc(c.img)}" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
     <h2>${esc(c.name)}</h2>
-    <p class="sub">${esc(LV[c.level].t)}${c.cost?`・${esc(c.cost)}`:""}${c.src?`・${esc(c.src)}`:""}</p>
+    <p class="sub">${esc(LV[c.level].t)}${c.cost?`・${esc(c.cost)}`:""}</p>
     <ul>
       ${ing.map(i=>`<li><b>${esc(i.n)}</b><span>${esc(i.a)}</span></li>`).join("")}
       ${sea.length?`<li class="s"><b>調味料</b><span>${sea.map(i=>esc(i.n)).join("・")}</span></li>`:""}
@@ -793,30 +810,16 @@ async function openDeck(id){
   const known = master.map(d=>d.name);
   const skip = n => known.includes(n) || rejected.includes(n);
 
-  if(id === "preset"){
-    cards = PRESET.filter(p=>!skip(p.name)).map(p=>({
-      name:p.name, level:p.level, url:"", cost:"", src:"定番",
-      ings:p.ings.map(([n,a])=>({n, a, s:isSeasoning(n)}))
-    }));
-    if(!cards.length) document.getElementById("find-err").innerHTML =
-      `<div class="err">定番はすべて判断済みです。他の束を選んでください。</div>`;
-    renderFind(); return;
-  }
-
-  if(!appId){
-    document.getElementById("find-err").innerHTML =
-      `<div class="err">設定で楽天アプリIDを登録してください。</div>`;
-    renderFind(); return;
-  }
+  if(!hasKeys()){ renderFind(); return; }
 
   const deck = DECKS.find(d=>d.id===id);
   loadingFind = true; renderFind();
   try{
     const cat = await rkGet(RK_CAT, {categoryType:"medium"});
     const all = (cat.result && cat.result.medium) || [];
-    const hit = all.filter(c => deck.k.some(k => String(c.categoryName).includes(k)));
+    if(!all.length) throw new Error("カテゴリを取得できませんでした");
+    const hit = deck.k.length ? all.filter(c => deck.k.some(k => String(c.categoryName).includes(k))) : [];
     const pool = hit.length ? hit : all;
-    if(!pool.length) throw new Error("カテゴリを取得できませんでした");
     const pick = pool[Math.floor(Math.random()*pool.length)];
     const rank = await rkGet(RK_RANK, {categoryId: pick.categoryId});
     cards = (rank.result||[]).filter(r=>!skip(r.recipeTitle)).map(toCard);
@@ -838,7 +841,8 @@ function toCard(r){
     return {n, a: mm ? mm[2].trim() : "", s: isSeasoning(n)};
   });
   return {name:r.recipeTitle||"名前のない料理", level, url:r.recipeUrl||"",
-          cost:r.recipeCost||"", src:"楽天レシピ", ings};
+          img:r.foodImageUrl||r.mediumImageUrl||r.smallImageUrl||"",
+          cost:r.recipeCost||"", ings};
 }
 
 async function judge(yes){
@@ -846,7 +850,7 @@ async function judge(yes){
   lastAct = {yes, card:c};
   if(yes){
     master.push({id:"d"+Date.now()+Math.floor(Math.random()*99999),
-      name:c.name, url:c.url, level:c.level, ings:c.ings});
+      name:c.name, url:c.url, img:c.img, level:c.level, ings:c.ings});
     adopted++;
     try{ await put("master", JSON.stringify(master)); }
     catch(e){ document.getElementById("find-err").innerHTML = `<div class="err">${esc(jaError(e))}</div>`; }
@@ -875,7 +879,7 @@ async function undoJudge(){
 }
 
 function rkGet(base, params){
-  const q = new URLSearchParams(Object.assign({applicationId:appId, format:"json"}, params));
+  const q = new URLSearchParams(Object.assign({applicationId:appId, accessKey:accKey, format:"json"}, params));
   return fetch(base + "?" + q).then(res=>{
     if(!res.ok) throw new Error("HTTP " + res.status);
     return res.json();
