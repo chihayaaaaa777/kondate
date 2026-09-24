@@ -815,8 +815,7 @@ async function openDeck(id){
   const deck = DECKS.find(d=>d.id===id);
   loadingFind = true; renderFind();
   try{
-    const cat = await rkGet(RK_CAT, {categoryType:"medium"});
-    const all = (cat.result && cat.result.medium) || [];
+    const all = await getCats();
     if(!all.length) throw new Error("カテゴリを取得できませんでした");
     const hit = deck.k.length ? all.filter(c => deck.k.some(k => String(c.categoryName).includes(k))) : [];
     const pool = hit.length ? hit : all;
@@ -878,18 +877,50 @@ async function undoJudge(){
   renderAll();
 }
 
-function rkGet(base, params){
-  const q = new URLSearchParams(Object.assign({applicationId:appId, accessKey:accKey, format:"json"}, params));
-  return fetch(base + "?" + q).then(res=>{
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
-  });
+let lastCall = 0;
+const GAP = 1200;   // 申請QPS=1 に合わせた最小間隔
+
+function wait(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+async function throttle(){
+  const since = Date.now() - lastCall;
+  if(since < GAP) await wait(GAP - since);
+  lastCall = Date.now();
 }
+
+async function rkGet(base, params, retried){
+  await throttle();
+  const q = new URLSearchParams(Object.assign({applicationId:appId, accessKey:accKey, format:"json"}, params));
+  const res = await fetch(base + "?" + q);
+  if(res.status === 429){
+    if(retried) throw new Error("HTTP 429");
+    await wait(2500);
+    return rkGet(base, params, true);
+  }
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+/* カテゴリ一覧は変わらないので端末に保存して使い回す */
+let catCache = null;
+async function getCats(){
+  if(catCache) return catCache;
+  try{
+    const v = await pull("rakuten-cats");
+    if(v){ catCache = JSON.parse(v); if(catCache.length) return catCache; }
+  }catch(e){}
+  const cat = await rkGet(RK_CAT, {categoryType:"medium"});
+  catCache = ((cat.result && cat.result.medium) || [])
+    .map(c=>({categoryId:c.categoryId, categoryName:c.categoryName}));
+  try{ await put("rakuten-cats", JSON.stringify(catCache)); }catch(e){}
+  return catCache;
+}
+
 function rkError(e){
   const m = String((e && e.message) || e);
   if(/HTTP 40[03]/.test(m)) return "楽天に拒否されました。アプリIDと、許可されたWebサイトの設定を確認してください";
   if(/HTTP 404/.test(m))    return "楽天のAPIが見つかりませんでした。仕様が変わった可能性があります";
-  if(/HTTP 429/.test(m))    return "短時間に呼びすぎました。少し待ってからお試しください";
+  if(/HTTP 429/.test(m))    return "楽天側の回数制限に達しました。30秒ほど待ってからもう一度お試しください";
   if(/Failed to fetch|Load failed|NetworkError/i.test(m)) return "通信できませんでした。オフラインか、楽天側の制限が原因です";
   return m;
 }
