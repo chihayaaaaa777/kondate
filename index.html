@@ -140,6 +140,40 @@ textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
 .m-row .n{flex:1;font-size:14.5px;font-weight:600}
 .m-row .s{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:2px}
 
+/* 候補カード */
+.deck{display:grid;gap:9px;margin-bottom:6px}
+.deck button{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 14px;border:1.5px solid var(--line);border-radius:9px;
+  background:var(--card);text-align:left;font-weight:700;font-size:14.5px;
+}
+.deck button.sel{border-color:var(--moss);background:var(--moss-soft);color:var(--moss)}
+.deck button small{font-weight:600;font-size:11.5px;color:var(--muted)}
+.cand{
+  background:var(--card);border:1px solid var(--line);border-radius:11px;
+  padding:16px;margin-bottom:14px;
+}
+.cand h2{font-size:18px;font-weight:700;margin:0 0 3px;line-height:1.35}
+.cand .sub{font-size:12.5px;color:var(--muted);margin:0 0 13px}
+.cand ul{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.cand li{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:7px 0;border-bottom:1px solid var(--line);font-size:14px;
+}
+.cand li.s{color:var(--muted);font-size:12.5px}
+.cand li b{font-weight:600}
+.cand li span{color:var(--muted);font-size:12.5px;flex:none}
+.judge{display:flex;gap:9px;align-items:stretch}
+.judge button{
+  flex:1;padding:15px 4px;border-radius:10px;font-size:15px;font-weight:700;
+  border:1.5px solid var(--line);background:var(--card);
+}
+.judge .yes{background:var(--moss);color:#fff;border-color:var(--moss)}
+.judge .no{color:var(--muted)}
+.judge .back{flex:0 0 58px;font-size:18px;color:var(--muted)}
+.judge button:disabled{opacity:.35}
+.prog{font-size:12px;color:var(--muted);text-align:center;margin:12px 0 0}
+
 /* misc */
 .empty{
   text-align:center;padding:36px 20px;color:var(--muted);font-size:14px;
@@ -176,14 +210,48 @@ textarea{min-height:150px;resize:vertical;line-height:1.55;font-size:14px}
 <section class="screen" id="s-master">
   <div class="bar">
     <h1 style="margin:0">料理マスタ</h1>
-    <button class="mini" onclick="openAdd()">＋ 追加</button>
+    <div style="display:flex;gap:14px">
+      <button class="mini" onclick="go('find')">探す</button>
+      <button class="mini" onclick="openAdd()">＋ 追加</button>
+    </div>
   </div>
   <div id="master-body"></div>
   <p class="note" id="store-note" style="margin-top:18px"></p>
   <div class="foot">
+    <button onclick="go('settings')">設定</button>
+  </div>
+</section>
+
+<!-- ============ 探す ============ -->
+<section class="screen" id="s-find">
+  <div class="bar">
+    <h1 style="margin:0">料理を探す</h1>
+    <button class="mini" onclick="go('master')">閉じる</button>
+  </div>
+  <div id="find-err"></div>
+  <div id="find-body"></div>
+</section>
+
+<!-- ============ 設定 ============ -->
+<section class="screen" id="s-settings">
+  <div class="bar">
+    <h1 style="margin:0">設定</h1>
+    <button class="mini" onclick="go('master')">閉じる</button>
+  </div>
+
+  <label for="f-appid">楽天アプリID</label>
+  <input type="text" id="f-appid" placeholder="楽天ウェブサービスで発行したID" autocomplete="off">
+  <p class="note">「探す」で料理を検索するのに使います。入力すると端末に保存され、次回から不要です。</p>
+  <button class="ghost" style="margin-top:8px" onclick="saveAppId()">保存する</button>
+  <div id="set-msg"></div>
+
+  <div class="sec">データ</div>
+  <div class="foot" style="margin-top:0">
     <button onclick="exportJson()">書き出し</button>
     <button onclick="importJson()">読み込み</button>
   </div>
+  <p class="note" id="store-note2"></p>
+  <div style="height:40px"></div>
 </section>
 
 <!-- ============ 登録 ============ -->
@@ -302,6 +370,8 @@ async function load(){
   await initStore();
   try{ const v = await pull("master"); master = v ? JSON.parse(v) : []; }catch(e){ master = []; }
   try{ const v = await pull("current-week"); week = v ? JSON.parse(v) : null; }catch(e){ week = null; }
+  await loadAppId();
+  await loadRejected();
   renderAll();
 }
 async function saveWeek(){
@@ -318,7 +388,12 @@ function go(t){
   window.scrollTo(0,0);
   renderAll();
 }
-function renderAll(){ renderWeek(); renderShop(); renderMaster(); }
+function renderAll(){
+  renderWeek(); renderShop(); renderMaster();
+  if(typeof renderFind === "function") renderFind();
+  const n2 = document.getElementById("store-note2");
+  if(n2) n2.textContent = STORE.label;
+}
 
 /* ---------- 今週 ---------- */
 function renderWeek(){
@@ -326,9 +401,9 @@ function renderWeek(){
   if(master.length < 3){
     el.innerHTML = `<h1>今週の4品</h1><p class="lede">まだ始められません。</p>
       <div class="empty"><b>あと${3-master.length}品で使えます</b>
-      料理を3品登録すると、献立を引けるようになります。<br>概要欄を貼るだけで登録できます。</div>
+      料理を3品えらぶと、献立を引けるようになります。<br>定番の束から1品ずつ選べます。</div>
       <div class="gap"></div>
-      <button class="primary" onclick="openAdd()">料理を登録する</button>`;
+      <button class="primary" onclick="go('find')">料理を選ぶ</button>`;
     return;
   }
   if(!week){
@@ -610,6 +685,210 @@ function importJson(){
 }
 
 function esc(s){ return String(s??"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ================= 設定 ================= */
+let appId = "";
+
+async function loadAppId(){
+  try{ appId = (await pull("rakuten-id")) || ""; }catch(e){ appId = ""; }
+  const f = document.getElementById("f-appid");
+  if(f) f.value = appId;
+}
+async function saveAppId(){
+  const v = document.getElementById("f-appid").value.trim();
+  appId = v;
+  const msg = document.getElementById("set-msg");
+  try{
+    await put("rakuten-id", v);
+    msg.innerHTML = `<p class="note" style="color:var(--moss);font-weight:700">保存しました。</p>`;
+  }catch(e){
+    msg.innerHTML = `<div class="err">${esc(jaError(e))}</div>`;
+  }
+}
+
+/* ================= 定番15品 ================= */
+const PRESET = [
+  {name:"豚の生姜焼き", level:1, ings:[["豚ロース薄切り","300g"],["玉ねぎ","1個"],["しょうが","1かけ"]]},
+  {name:"鶏の照り焼き", level:1, ings:[["鶏もも肉","2枚"],["長ねぎ","1本"]]},
+  {name:"親子丼", level:1, ings:[["鶏もも肉","1枚"],["玉ねぎ","1個"],["卵","3個"],["三つ葉","少量"]]},
+  {name:"肉じゃが", level:3, ings:[["牛こま切れ肉","200g"],["じゃがいも","3個"],["にんじん","1本"],["玉ねぎ","1個"],["糸こんにゃく","1袋"]]},
+  {name:"鮭のバター醤油焼き", level:1, ings:[["生鮭","2切れ"],["しめじ","1株"]]},
+  {name:"豚バラ大根", level:2, ings:[["豚バラ薄切り","200g"],["大根","1/2本"]]},
+  {name:"麻婆豆腐", level:2, ings:[["豚ひき肉","200g"],["木綿豆腐","1丁"],["長ねぎ","1/2本"],["にんにく","1かけ"]]},
+  {name:"回鍋肉", level:1, ings:[["豚バラ薄切り","200g"],["キャベツ","1/4個"],["ピーマン","2個"]]},
+  {name:"ガパオライス", level:1, ings:[["鶏ひき肉","250g"],["パプリカ","1個"],["バジル","1パック"],["卵","2個"]]},
+  {name:"青椒肉絲", level:2, ings:[["豚こま切れ肉","200g"],["ピーマン","4個"],["たけのこ水煮","150g"]]},
+  {name:"鶏肉のトマト煮", level:3, ings:[["鶏もも肉","2枚"],["カットトマト缶","1缶"],["玉ねぎ","1個"],["しめじ","1株"]]},
+  {name:"ペペロンチーノ", level:1, ings:[["スパゲッティ","200g"],["にんにく","2かけ"],["鷹の爪","2本"]]},
+  {name:"ナポリタン", level:1, ings:[["スパゲッティ","200g"],["ウインナー","4本"],["ピーマン","2個"],["玉ねぎ","1/2個"]]},
+  {name:"ハンバーグ", level:3, ings:[["合いびき肉","400g"],["玉ねぎ","1個"],["卵","1個"],["パン粉","1/2カップ"],["牛乳","大さじ3"]]},
+  {name:"豚汁", level:2, ings:[["豚バラ薄切り","150g"],["大根","1/4本"],["にんじん","1/2本"],["ごぼう","1/2本"],["長ねぎ","1/2本"],["木綿豆腐","1/2丁"]]}
+];
+
+/* ================= 料理を探す ================= */
+const RK_CAT  = "https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426";
+const RK_RANK = "https://app.rakuten.co.jp/services/api/Recipe/CategoryRanking/20170426";
+const DECKS = [
+  {id:"preset", t:"定番",    d:"まずはここから。和洋中の15品"},
+  {id:"和食",   t:"和食",    d:"煮物・焼き魚・丼", k:["肉じゃが","生姜焼き","照り焼き","煮物","丼"]},
+  {id:"中華",   t:"中華",    d:"麻婆・回鍋肉・炒めもの", k:["麻婆","回鍋肉","青椒肉絲","チャーハン","餃子"]},
+  {id:"洋食",   t:"洋食",    d:"パスタ・煮込み・ソテー", k:["パスタ","ハンバーグ","グラタン","トマト煮","ソテー"]},
+  {id:"麺丼",   t:"麺・丼",  d:"一皿で完結するもの", k:["うどん","焼きそば","丼","ラーメン","そうめん"]}
+];
+
+let cards = [];       // 候補の束
+let deckId = null;
+let lastAct = null;   // {type:"yes"|"no", card, index}
+let adopted = 0;
+let rejected = [];    // 見送った料理名
+let loadingFind = false;
+
+async function loadRejected(){
+  try{ const v = await pull("rejected"); rejected = v ? JSON.parse(v) : []; }
+  catch(e){ rejected = []; }
+}
+async function saveRejected(){ try{ await put("rejected", JSON.stringify(rejected)); }catch(e){} }
+
+function renderFind(){
+  const el = document.getElementById("find-body");
+  if(!el) return;
+  if(loadingFind){ el.innerHTML = `<div class="empty">候補を探しています…</div>`; return; }
+
+  if(cards.length){
+    const c = cards[0];
+    el.innerHTML = cardHtml(c) + `
+      <div class="judge">
+        <button class="back" onclick="undoJudge()" ${lastAct?"":"disabled"} aria-label="ひとつ戻す">↩</button>
+        <button class="no" onclick="judge(false)">見送る</button>
+        <button class="yes" onclick="judge(true)">作りたい</button>
+      </div>
+      <p class="prog">残り${cards.length}件${adopted?`・${adopted}品を追加済み`:""}</p>`;
+    return;
+  }
+
+  const done = deckId ? `<div class="empty"><b>この束は見終わりました</b>
+      ${adopted?`${adopted}品をマスタに追加しました。`:"追加した料理はありません。"}</div><div class="gap"></div>` : "";
+  el.innerHTML = done + `<p class="lede">見たい束を選ぶと、1品ずつ出てきます。</p>
+    <div class="deck">${DECKS.map(d=>`
+      <button onclick="openDeck('${d.id}')"><span>${d.t}<br><small>${d.d}</small></span><span style="color:var(--muted)">→</span></button>`).join("")}</div>
+    ${appId ? "" : `<p class="note">定番以外を見るには、設定で楽天アプリIDの登録が必要です。</p>`}`;
+}
+
+function cardHtml(c){
+  const ing = c.ings.filter(i=>!i.s), sea = c.ings.filter(i=>i.s);
+  return `<div class="cand">
+    <h2>${esc(c.name)}</h2>
+    <p class="sub">${esc(LV[c.level].t)}${c.cost?`・${esc(c.cost)}`:""}${c.src?`・${esc(c.src)}`:""}</p>
+    <ul>
+      ${ing.map(i=>`<li><b>${esc(i.n)}</b><span>${esc(i.a)}</span></li>`).join("")}
+      ${sea.length?`<li class="s"><b>調味料</b><span>${sea.map(i=>esc(i.n)).join("・")}</span></li>`:""}
+    </ul>
+    ${c.url?`<p class="note" style="margin-top:11px"><a href="${esc(c.url)}" target="_blank" rel="noopener" style="color:var(--moss);font-weight:700">作り方を見る</a></p>`:""}
+  </div>`;
+}
+
+async function openDeck(id){
+  deckId = id; adopted = 0; lastAct = null;
+  document.getElementById("find-err").innerHTML = "";
+  const known = master.map(d=>d.name);
+  const skip = n => known.includes(n) || rejected.includes(n);
+
+  if(id === "preset"){
+    cards = PRESET.filter(p=>!skip(p.name)).map(p=>({
+      name:p.name, level:p.level, url:"", cost:"", src:"定番",
+      ings:p.ings.map(([n,a])=>({n, a, s:isSeasoning(n)}))
+    }));
+    if(!cards.length) document.getElementById("find-err").innerHTML =
+      `<div class="err">定番はすべて判断済みです。他の束を選んでください。</div>`;
+    renderFind(); return;
+  }
+
+  if(!appId){
+    document.getElementById("find-err").innerHTML =
+      `<div class="err">設定で楽天アプリIDを登録してください。</div>`;
+    renderFind(); return;
+  }
+
+  const deck = DECKS.find(d=>d.id===id);
+  loadingFind = true; renderFind();
+  try{
+    const cat = await rkGet(RK_CAT, {categoryType:"medium"});
+    const all = (cat.result && cat.result.medium) || [];
+    const hit = all.filter(c => deck.k.some(k => String(c.categoryName).includes(k)));
+    const pool = hit.length ? hit : all;
+    if(!pool.length) throw new Error("カテゴリを取得できませんでした");
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+    const rank = await rkGet(RK_RANK, {categoryId: pick.categoryId});
+    cards = (rank.result||[]).filter(r=>!skip(r.recipeTitle)).map(toCard);
+    if(!cards.length) throw new Error("新しい料理が見つかりませんでした。もう一度お試しください");
+  }catch(e){
+    cards = [];
+    document.getElementById("find-err").innerHTML = `<div class="err">${esc(rkError(e))}</div>`;
+  }
+  loadingFind = false; renderFind();
+}
+
+function toCard(r){
+  const mins = parseInt(String(r.recipeIndication||"").replace(/[^0-9]/g,""),10);
+  const level = !mins ? 2 : (mins<=15 ? 1 : (mins<=30 ? 2 : 3));
+  const ings = (r.recipeMaterial||[]).map(m=>{
+    const c = String(m).trim();
+    const mm = c.match(/^(.+?)[\s　]+((?:[0-9０-９]|大さじ|小さじ|カップ|適量|少々|少量|お好み|ひとつまみ|ひとかけ|適宜).*)$/);
+    const n = mm ? mm[1].trim() : c;
+    return {n, a: mm ? mm[2].trim() : "", s: isSeasoning(n)};
+  });
+  return {name:r.recipeTitle||"名前のない料理", level, url:r.recipeUrl||"",
+          cost:r.recipeCost||"", src:"楽天レシピ", ings};
+}
+
+async function judge(yes){
+  const c = cards.shift();
+  lastAct = {yes, card:c};
+  if(yes){
+    master.push({id:"d"+Date.now()+Math.floor(Math.random()*99999),
+      name:c.name, url:c.url, level:c.level, ings:c.ings});
+    adopted++;
+    try{ await put("master", JSON.stringify(master)); }
+    catch(e){ document.getElementById("find-err").innerHTML = `<div class="err">${esc(jaError(e))}</div>`; }
+  }else{
+    rejected.push(c.name); saveRejected();
+  }
+  renderAll();
+}
+
+async function undoJudge(){
+  if(!lastAct) return;
+  const {yes, card} = lastAct;
+  if(yes){
+    const i = master.map(d=>d.name).lastIndexOf(card.name);
+    if(i>=0) master.splice(i,1);
+    adopted = Math.max(0, adopted-1);
+    try{ await put("master", JSON.stringify(master)); }catch(e){}
+  }else{
+    const i = rejected.lastIndexOf(card.name);
+    if(i>=0) rejected.splice(i,1);
+    saveRejected();
+  }
+  cards.unshift(card);
+  lastAct = null;
+  renderAll();
+}
+
+function rkGet(base, params){
+  const q = new URLSearchParams(Object.assign({applicationId:appId, format:"json"}, params));
+  return fetch(base + "?" + q).then(res=>{
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  });
+}
+function rkError(e){
+  const m = String((e && e.message) || e);
+  if(/HTTP 40[03]/.test(m)) return "楽天に拒否されました。アプリIDと、許可されたWebサイトの設定を確認してください";
+  if(/HTTP 404/.test(m))    return "楽天のAPIが見つかりませんでした。仕様が変わった可能性があります";
+  if(/HTTP 429/.test(m))    return "短時間に呼びすぎました。少し待ってからお試しください";
+  if(/Failed to fetch|Load failed|NetworkError/i.test(m)) return "通信できませんでした。オフラインか、楽天側の制限が原因です";
+  return m;
+}
 
 load();
 </script>
